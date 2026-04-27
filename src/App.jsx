@@ -287,10 +287,138 @@ export default function App() {
           {username || "demo"} · switch user
         </button>
 
+        {/* Add-to-profile button — only when a real user is loaded */}
+        {username && (
+          <AddToProfileButton username={username} theme={currentTheme} />
+        )}
+
         {/* Backlink */}
         <Backlink theme={currentTheme} />
       </div>
     </>
+  );
+}
+
+// ── Add-to-profile button ──────────────────────────────────────────────────
+function AddToProfileButton({ username, theme }) {
+  const [open, setOpen] = useState(false);
+  const [copied, setCopied] = useState(false);
+
+  const markdown = `[![${username}'s GitCity Skyline](https://gitcity.draht.dev/api/svg?u=${username})](https://gitcity.draht.dev/${username})`;
+
+  async function handleCopy() {
+    try {
+      await navigator.clipboard.writeText(markdown);
+    } catch (_) {
+      const ta = document.createElement("textarea");
+      ta.value = markdown;
+      document.body.appendChild(ta);
+      ta.select();
+      try { document.execCommand("copy"); } catch (_) { }
+      document.body.removeChild(ta);
+    }
+    setCopied(true);
+    setTimeout(() => setCopied(false), 1800);
+  }
+
+  return (
+    <div
+      className="add-profile-wrap"
+      style={{
+        position: "fixed",
+        top: "0.6rem",
+        right: "0.75rem",
+        zIndex: 100,
+        display: "flex",
+        flexDirection: "column",
+        alignItems: "flex-end",
+      }}
+    >
+      <button
+        onClick={() => setOpen(o => !o)}
+        title="Embed this skyline in your GitHub README"
+        style={{
+          background: `${theme.surface}dd`,
+          border: `1px solid ${open ? theme.accent : theme.border}`,
+          borderRadius: "6px",
+          color: open ? theme.accent : theme.muted,
+          fontSize: "0.58rem",
+          fontFamily: "'Courier New', monospace",
+          letterSpacing: "0.08em",
+          padding: "0.22rem 0.55rem",
+          cursor: "pointer",
+          whiteSpace: "nowrap",
+          transition: "color 0.15s, border-color 0.15s",
+        }}
+        onMouseEnter={e => {
+          if (open) return;
+          e.currentTarget.style.color = theme.accent;
+          e.currentTarget.style.borderColor = theme.accent;
+        }}
+        onMouseLeave={e => {
+          if (open) return;
+          e.currentTarget.style.color = theme.muted;
+          e.currentTarget.style.borderColor = theme.border;
+        }}
+      >
+        + add to GitHub profile
+      </button>
+
+      {open && (
+        <div style={{
+          marginTop: "0.4rem",
+          background: `${theme.surface}f0`,
+          border: `1px solid ${theme.border}`,
+          borderRadius: "8px",
+          padding: "0.6rem",
+          width: "min(380px, 80vw)",
+          fontFamily: "'Courier New', monospace",
+          color: theme.text,
+          boxShadow: `0 8px 24px rgba(0,0,0,0.35)`,
+          backdropFilter: "blur(10px)",
+        }}>
+          <div style={{
+            fontSize: "0.55rem", color: theme.muted,
+            letterSpacing: "0.1em", textTransform: "uppercase",
+            marginBottom: "0.4rem",
+          }}>
+            Paste into your GitHub profile README
+          </div>
+          <pre style={{
+            background: theme.bg,
+            border: `1px solid ${theme.border}60`,
+            borderRadius: "4px",
+            padding: "0.5rem",
+            fontSize: "0.6rem",
+            color: theme.text,
+            whiteSpace: "pre-wrap",
+            wordBreak: "break-all",
+            margin: 0,
+            lineHeight: 1.5,
+          }}>{markdown}</pre>
+          <button
+            onClick={handleCopy}
+            style={{
+              marginTop: "0.5rem",
+              width: "100%",
+              padding: "0.35rem",
+              fontSize: "0.6rem",
+              fontFamily: "inherit",
+              letterSpacing: "0.1em",
+              textTransform: "uppercase",
+              background: copied ? `${theme.accent}25` : "transparent",
+              border: `1px solid ${copied ? theme.accent : theme.border}`,
+              color: copied ? theme.accent : theme.muted,
+              borderRadius: "4px",
+              cursor: "pointer",
+              transition: "all 0.15s",
+            }}
+          >
+            {copied ? "✓ copied — paste into README" : "⧉ copy markdown"}
+          </button>
+        </div>
+      )}
+    </div>
   );
 }
 

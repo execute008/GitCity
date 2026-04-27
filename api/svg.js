@@ -5,6 +5,10 @@
  * Isometric 3D skyline SVG for README embeds.
  */
 
+import { Resource } from "sst";
+
+const GITHUB_GRAPHQL = "https://api.github.com/graphql";
+
 const THEMES = {
     matrix: { bg: "#060d06", ground: "#0a140a", accent: "#00ff41", muted: "#2d5a2d", text: "#b0ffb0", border: "#0e2a0e", levels: ["#0a1a0a", "#0e4020", "#1a7535", "#27ae60", "#00ff41"] },
     noir: { bg: "#04080f", ground: "#080f1a", accent: "#00d4ff", muted: "#1a3a50", text: "#e0f4ff", border: "#0a1e30", levels: ["#0c1525", "#0d2d4e", "#0e5080", "#1a8fc1", "#00d4ff"] },
@@ -24,14 +28,39 @@ function adjustBrightness(hex, amt) {
     return "#" + [r, g, b].map(x => x.toString(16).padStart(2, "0")).join("");
 }
 
-async function fetchContributions(username) {
-    const url = `https://github-contributions-api.jogruber.de/v4/${encodeURIComponent(username)}?y=last`;
-    const res = await fetch(url, { headers: { "User-Agent": "GitCity/1.0" } });
-    if (!res.ok) throw new Error(`Could not fetch contributions (${res.status})`);
+async function fetchContributions(username, token) {
+    const now = new Date();
+    const fromDate = new Date(now.getTime() - 365 * 24 * 60 * 60 * 1000);
+    const from = fromDate.toISOString().replace(/\.\d{3}Z$/, "Z");
+    const to = now.toISOString().replace(/\.\d{3}Z$/, "Z");
+
+    const query = `
+      query($login: String!, $from: DateTime!, $to: DateTime!) {
+        user(login: $login) {
+          contributionsCollection(from: $from, to: $to) {
+            contributionCalendar {
+              weeks { contributionDays { date contributionCount } }
+            }
+          }
+        }
+      }
+    `;
+    const res = await fetch(GITHUB_GRAPHQL, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "Authorization": `bearer ${token}` },
+        body: JSON.stringify({ query, variables: { login: username, from, to } }),
+    });
+
+    if (!res.ok) throw new Error(`GitHub API error: ${res.status}`);
     const json = await res.json();
-    if (!Array.isArray(json.contributions) || json.contributions.length === 0)
-        throw new Error("No contribution data found");
-    return json.contributions.map(d => ({ date: d.date, count: d.count || 0 }));
+    if (json.errors) throw new Error(json.errors[0]?.message ?? "GraphQL error");
+
+    const weeks = json.data?.user?.contributionsCollection?.contributionCalendar?.weeks;
+    if (!weeks) throw new Error(`User "${username}" not found.`);
+
+    return weeks
+        .flatMap(w => w.contributionDays)
+        .map(d => ({ date: d.date, count: d.contributionCount }));
 }
 
 function buildIsometricSVG(username, days, themeName) {
@@ -231,8 +260,11 @@ export async function handler(event) {
         return svgResponse(400, errorSVG("Use ?u=YOUR_GITHUB_USERNAME"), false);
     }
 
+    const token = Resource.GithubToken.value;
+    if (!token) return svgResponse(200, errorSVG("GitHub token not configured"), false);
+
     try {
-        const days = await fetchContributions(username);
+        const days = await fetchContributions(username, token);
         return svgResponse(200, buildIsometricSVG(username, days, theme));
     } catch (err) {
         return svgResponse(200, errorSVG(err.message), false);

@@ -33,6 +33,7 @@ export default $config({
     const svg = new sst.aws.Function("Svg", {
       handler: "api/svg.handler",
       url: true,
+      link: [githubToken],
       environment: { CACHE_CONTROL: cacheControl },
     });
 

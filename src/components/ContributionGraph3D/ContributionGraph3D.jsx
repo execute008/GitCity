@@ -196,7 +196,7 @@ export function ContributionGraph3D({
         <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", flexWrap: "wrap", gap: "0.5rem" }}>
           <div>
             <div style={{ fontSize: "0.52rem", letterSpacing: "0.2em", color: theme.muted, textTransform: "uppercase", marginBottom: "0.15rem" }}>
-              ◈ GitCity · gitcity.natrajx.in
+              ◈ GitCity · gitcity.draht.dev
             </div>
             <h1 style={{
               margin: 0, fontSize: "1.6rem", fontWeight: 900, letterSpacing: "-0.03em", color: theme.accent,

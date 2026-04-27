@@ -1,6 +1,8 @@
 /**
- * api/svg.js — Isometric 3D skyline SVG for README embeds
- * URL: /api/svg?u=USERNAME&theme=matrix
+ * api/svg.js — Lambda Function URL handler
+ * GET /api/svg?u=USERNAME&theme=matrix
+ *
+ * Isometric 3D skyline SVG for README embeds.
  */
 
 const THEMES = {
@@ -37,23 +39,17 @@ function buildIsometricSVG(username, days, themeName) {
     const total = days.reduce((s, d) => s + d.count, 0);
     const maxC = Math.max(...days.map(d => d.count), 1);
 
-    // Isometric tile dimensions
-    const TW = 12;   // tile width
-    const TH = 6;    // tile height (half of width for isometric)
-    const WEEKS = 53, DAYS = 7;
+    // Absolute-scale: 1 commit ≈ 6 sqrt-units. Uncapped — a 400-commit day
+    // really is 2× the height of a 100-commit day. Colours still bucket
+    // against maxC so the legend stays meaningful per user.
+    const BUILD_UNIT = 6;
+    const heightFor = c => c === 0 ? 1 : Math.max(2, Math.sqrt(c) * BUILD_UNIT);
+    const actualMaxH = Math.max(...days.map(d => heightFor(d.count)), 60);
 
-    // Group days into week columns
-    const grid = Array.from({ length: WEEKS }, () => new Array(DAYS).fill(0));
+    const TW = 12, TH = 6, WEEKS = 53, DAYS = 7;
+
     const dayList = [...days].sort((a, b) => a.date.localeCompare(b.date));
-    dayList.forEach(d => {
-        const dow = new Date(d.date + "T12:00:00Z").getUTCDay();
-        // find week index
-        const weekIdx = Math.floor(dayList.indexOf(d) / 7);
-        const wi = Math.min(weekIdx, WEEKS - 1);
-        grid[wi][dow] = d.count;
-    });
 
-    // Better week grouping
     const weeks = [];
     let week = new Array(7).fill(0);
     dayList.forEach(d => {
@@ -65,28 +61,20 @@ function buildIsometricSVG(username, days, themeName) {
 
     const numWeeks = Math.min(weeks.length, 53);
 
-    // Isometric projection: screen x,y from grid col(week),row(day)
-    // x = (col - row) * TW/2
-    // y = (col + row) * TH/2
     function iso(col, row) {
-        return {
-            x: (col - row) * (TW / 2),
-            y: (col + row) * (TH / 2),
-        };
+        return { x: (col - row) * (TW / 2), y: (col + row) * (TH / 2) };
     }
 
-    // Find bounds
     const corners = [
         iso(0, 0), iso(numWeeks - 1, 0),
-        iso(0, DAYS - 1), iso(numWeeks - 1, DAYS - 1)
+        iso(0, DAYS - 1), iso(numWeeks - 1, DAYS - 1),
     ];
     const minX = Math.min(...corners.map(c => c.x));
     const maxX = Math.max(...corners.map(c => c.x)) + TW;
     const maxY = Math.max(...corners.map(c => c.y)) + TH;
 
-    const MAX_H = 60; // max building height in px
     const PAD_X = 20;
-    const PAD_TOP = MAX_H + 28; // space above for tallest building + header
+    const PAD_TOP = actualMaxH + 28;
     const PAD_BOT = 28;
 
     const SVG_W = (maxX - minX) + PAD_X * 2;
@@ -100,24 +88,20 @@ function buildIsometricSVG(username, days, themeName) {
         return r < 0.25 ? 1 : r < 0.5 ? 2 : r < 0.75 ? 3 : 4;
     }
 
-    // Build buildings sorted back-to-front (painter's algorithm)
-    // Sort by col+row ascending so far tiles draw first
     const buildings = [];
     for (let wi = 0; wi < numWeeks; wi++) {
         for (let day = 0; day < DAYS; day++) {
             const count = weeks[wi][day];
             const lv = level(count);
             const base = t.levels[lv];
-            const bH = count === 0 ? 1 : Math.max(2, (count / maxC) * MAX_H);
+            const bH = heightFor(count);
             buildings.push({ wi, day, count, lv, base, bH });
         }
     }
-    // Painter: sort by wi+day ascending
     buildings.sort((a, b) => (a.wi + a.day) - (b.wi + b.day) || (a.day - b.day));
 
     let shapes = "";
 
-    // Ground grid lines
     for (let wi = 0; wi <= numWeeks; wi += 4) {
         const p0 = iso(wi, 0), p1 = iso(wi, DAYS - 1);
         shapes += `<line x1="${OX + p0.x + TW / 2}" y1="${OY + p0.y + TH / 2}" x2="${OX + p1.x + TW / 2}" y2="${OY + p1.y + TH / 2}" stroke="${t.border}" stroke-width="0.5" opacity="0.6"/>`;
@@ -127,24 +111,19 @@ function buildIsometricSVG(username, days, themeName) {
         shapes += `<line x1="${OX + p0.x + TW / 2}" y1="${OY + p0.y + TH / 2}" x2="${OX + p1.x + TW / 2}" y2="${OY + p1.y + TH / 2}" stroke="${t.border}" stroke-width="0.5" opacity="0.6"/>`;
     }
 
-    // Draw each building
     for (const { wi, day, count, base, bH } of buildings) {
         const { x, y } = iso(wi, day);
-        const cx = OX + x + TW / 2; // center x of tile
-        const cy = OY + y + TH / 2; // center y of tile (ground level)
+        const cx = OX + x + TW / 2;
+        const cy = OY + y + TH / 2;
 
-        // Tile top-face corners (rhombus):
-        // T=top, R=right, B=bottom, L=left
         const Tx = cx, Ty = cy - bH;
         const Rx = cx + TW / 2, Ry = cy - bH + TH / 2;
         const Bx = cx, By = cy - bH + TH;
         const Lx = cx - TW / 2, Ly = cy - bH + TH / 2;
 
-        // Bottom of left and right faces
         const LBy = Ly + bH, BBy = By + bH, RBy = Ry + bH;
 
         if (count === 0) {
-            // Flat ground slab
             const colFlat = t.levels[0];
             shapes += `<polygon points="${Tx},${Ty} ${Rx},${Ry} ${Bx},${By} ${Lx},${Ly}" fill="${colFlat}" stroke="${t.border}" stroke-width="0.3"/>`;
         } else {
@@ -153,26 +132,18 @@ function buildIsometricSVG(username, days, themeName) {
             const colRight = adjustBrightness(base, -25);
             const colEdge = adjustBrightness(base, -45);
 
-            // Right face (draw first — furthest from viewer)
             shapes += `<polygon points="${Rx},${Ry} ${Bx},${By} ${Bx},${BBy} ${Rx},${RBy}" fill="${colRight}" stroke="${colEdge}" stroke-width="0.3"/>`;
-            // Left face
             shapes += `<polygon points="${Lx},${Ly} ${Bx},${By} ${Bx},${BBy} ${Lx},${LBy}" fill="${colLeft}" stroke="${colEdge}" stroke-width="0.3"/>`;
-            // Top face
             shapes += `<polygon points="${Tx},${Ty} ${Rx},${Ry} ${Bx},${By} ${Lx},${Ly}" fill="${colTop}" stroke="${colEdge}" stroke-width="0.3"/>`;
-
-            // Roof highlight
             shapes += `<polyline points="${Lx},${Ly} ${Tx},${Ty} ${Rx},${Ry}" fill="none" stroke="${adjustBrightness(base, 80)}" stroke-width="0.5" opacity="0.6"/>`;
 
-            // Windows on left face for tall buildings
             if (bH > 12) {
-                const floors = Math.max(1, Math.floor(bH / 8));
+                const floors = Math.max(1, Math.floor(bH / 6));
                 const wW = TW * 0.12, wH = TH * 0.55;
-                for (let f = 0; f < Math.min(floors, 4); f++) {
+                for (let f = 0; f < floors; f++) {
                     const fy = By + bH - (f + 1) * (bH / floors) + bH / floors * 0.2;
-                    // left face col 0
                     const wx0 = Lx + (TW / 2) * 0.25 - (wW / 2);
                     shapes += `<rect x="${wx0}" y="${fy}" width="${wW}" height="${wH}" rx="0.3" fill="${t.accent}" opacity="0.35"/>`;
-                    // left face col 1
                     const wx1 = Lx + (TW / 2) * 0.7 - (wW / 2);
                     shapes += `<rect x="${wx1}" y="${fy}" width="${wW}" height="${wH}" rx="0.3" fill="${t.accent}" opacity="0.25"/>`;
                 }
@@ -180,10 +151,8 @@ function buildIsometricSVG(username, days, themeName) {
         }
     }
 
-    // Month labels above grid
     let monthLabels = ""; let lastM = -1;
     weeks.forEach((w, wi) => {
-        // find first non-zero or use index
         const idx = dayList.slice(wi * 7, (wi + 1) * 7).find(d => d);
         if (!idx) return;
         const dt = new Date(idx.date + "T12:00:00Z");
@@ -197,7 +166,6 @@ function buildIsometricSVG(username, days, themeName) {
         }
     });
 
-    // Legend
     const lx = PAD_X, ly = SVG_H - 16;
     const legend = `
   <text x="${lx}" y="${ly + 5}" font-family="monospace" font-size="7" fill="${t.muted}">Less</text>
@@ -211,19 +179,15 @@ function buildIsometricSVG(username, days, themeName) {
     <polygon points="${px - TW / 2},${py - h + TH / 2} ${px},${py - h + TH} ${px},${py - h + TH + h} ${px - TW / 2},${py - h + TH / 2 + h}" fill="${cl}"/>`;
     }).join("")}
   <text x="${lx + 80}" y="${ly + 5}" font-family="monospace" font-size="7" fill="${t.muted}">More</text>
-  <text x="${SVG_W - PAD_X}" y="${ly + 5}" text-anchor="end" font-family="monospace" font-size="7" fill="${t.muted}">gitcity.natrajx.in</text>`;
+  <text x="${SVG_W - PAD_X}" y="${ly + 5}" text-anchor="end" font-family="monospace" font-size="7" fill="${t.muted}">gitcity.draht.dev</text>`;
 
     return `<svg xmlns="http://www.w3.org/2000/svg" width="${SVG_W}" height="${SVG_H}" viewBox="0 0 ${SVG_W} ${SVG_H}">
   <rect width="${SVG_W}" height="${SVG_H}" rx="12" fill="${t.bg}"/>
-  <!-- Header -->
   <text x="${PAD_X}" y="18" font-family="monospace" font-size="11" font-weight="bold" fill="${t.accent}">${esc(username)}</text>
   <text x="${PAD_X + username.length * 7}" y="18" font-family="monospace" font-size="10" fill="${t.muted}">'s GitCity Skyline</text>
   <text x="${PAD_X}" y="30" font-family="monospace" font-size="8" fill="${t.muted}">${total.toLocaleString()} contributions in the last year</text>
-  <!-- Month labels -->
   ${monthLabels}
-  <!-- Buildings -->
   ${shapes}
-  <!-- Legend -->
   ${legend}
 </svg>`;
 }
@@ -236,27 +200,41 @@ function errorSVG(msg) {
 </svg>`;
 }
 
-export default async function handler(req, res) {
-    res.setHeader("Access-Control-Allow-Origin", "*");
-    if (req.method === "OPTIONS") return res.status(200).end();
+const corsHeaders = {
+    "Access-Control-Allow-Origin": "*",
+    "Access-Control-Allow-Methods": "GET, OPTIONS",
+};
 
-    let username = (req.query.u || req.query.username || "").trim().replace(/\.svg$/i, "");
-    const theme = (req.query.theme || "matrix").toLowerCase();
+function svgResponse(statusCode, body, cache = true) {
+    return {
+        statusCode,
+        headers: {
+            "Content-Type": "image/svg+xml",
+            "Cache-Control": cache
+                ? (process.env.CACHE_CONTROL || "s-maxage=3600, stale-while-revalidate=86400")
+                : "no-store",
+            ...corsHeaders,
+        },
+        body,
+    };
+}
+
+export async function handler(event) {
+    const method = event.requestContext?.http?.method ?? "GET";
+    if (method === "OPTIONS") return { statusCode: 200, headers: corsHeaders, body: "" };
+
+    const qs = event.queryStringParameters || {};
+    let username = (qs.u || qs.username || "").trim().replace(/\.svg$/i, "");
+    const theme = (qs.theme || "matrix").toLowerCase();
 
     if (!username || !/^[a-zA-Z0-9][a-zA-Z0-9-]{0,38}$/.test(username)) {
-        res.setHeader("Content-Type", "image/svg+xml");
-        return res.status(400).send(errorSVG("Use ?u=YOUR_GITHUB_USERNAME"));
+        return svgResponse(400, errorSVG("Use ?u=YOUR_GITHUB_USERNAME"), false);
     }
 
     try {
         const days = await fetchContributions(username);
-        const svg = buildIsometricSVG(username, days, theme);
-        res.setHeader("Content-Type", "image/svg+xml");
-        res.setHeader("Cache-Control", "s-maxage=3600, stale-while-revalidate=86400");
-        return res.status(200).send(svg);
+        return svgResponse(200, buildIsometricSVG(username, days, theme));
     } catch (err) {
-        res.setHeader("Content-Type", "image/svg+xml");
-        res.setHeader("Cache-Control", "no-store");
-        return res.status(200).send(errorSVG(err.message));
+        return svgResponse(200, errorSVG(err.message), false);
     }
 }

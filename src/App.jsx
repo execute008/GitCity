@@ -1,6 +1,6 @@
 /**
  * App.jsx — GitCity (SEO-Optimized)
- * https://gitcity.natrajx.in
+ * https://gitcity.draht.dev
  *
  * Auth flow (no token needed):
  *  1. ?username=torvalds in URL  → auto-fetch
@@ -89,8 +89,8 @@ export default function App() {
       "@type": "ProfilePage",
       "name": `${username} - GitCity`,
       "description": `View ${username}'s GitHub contributions as an interactive isometric 3D city skyline`,
-      "url": `https://gitcity.natrajx.in/${username}`,
-      "image": profile?.avatarUrl || "https://gitcity.natrajx.in/screenshots/banner.png",
+      "url": `https://gitcity.draht.dev/${username}`,
+      "image": profile?.avatarUrl || "https://gitcity.draht.dev/screenshots/banner.png",
       "author": {
         "@type": "Person",
         "name": username,
@@ -143,7 +143,7 @@ export default function App() {
           <meta property="og:title" content="GitCity — Your GitHub Contributions as a 3D City" />
           <meta property="og:description"
             content="Transform your GitHub commit history into a stunning isometric city skyline. Every day you code, a building grows. Free embed for your README or portfolio." />
-          <meta property="og:url" content="https://gitcity.natrajx.in/" />
+          <meta property="og:url" content="https://gitcity.draht.dev/" />
           <meta name="twitter:title" content="GitCity — GitHub Contributions as a 3D City" />
           <meta name="twitter:description"
             content="Turn your GitHub commit history into a beautiful isometric city. Free, embeddable, themeable." />
@@ -166,8 +166,8 @@ export default function App() {
 
   const pageTitle = `${username} - GitCity`;
   const pageDescription = profile?.bio || `View ${username}'s GitHub contributions as an interactive 3D city skyline. ${data?.length || 0} days tracked.`;
-  const pageUrl = `https://gitcity.natrajx.in/${username}`;
-  const pageImage = profile?.avatarUrl || "https://gitcity.natrajx.in/screenshots/banner.png";
+  const pageUrl = `https://gitcity.draht.dev/${username}`;
+  const pageImage = profile?.avatarUrl || "https://gitcity.draht.dev/screenshots/banner.png";
 
   const profileStructuredData = getProfileStructuredData();
 
@@ -214,7 +214,7 @@ export default function App() {
             "@context": "https://schema.org",
             "@type": "BreadcrumbList",
             "itemListElement": [
-              { "@type": "ListItem", "position": 1, "name": "Home", "item": "https://gitcity.natrajx.in" },
+              { "@type": "ListItem", "position": 1, "name": "Home", "item": "https://gitcity.draht.dev" },
               { "@type": "ListItem", "position": 2, "name": username, "item": pageUrl }
             ]
           })}

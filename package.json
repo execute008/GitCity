@@ -1,17 +1,22 @@
 {
-  "name": "contribution-graph-3d",
+  "name": "gitcity",
   "version": "1.0.0",
-  "description": "Reusable isometric 3D contribution graph React component",
+  "description": "GitCity — GitHub contributions as a 3D city. Deployed via SST v4 to AWS.",
   "type": "module",
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "sst": "sst",
+    "deploy": "sst deploy --stage production",
+    "deploy:dev": "sst deploy --stage dev",
+    "remove": "sst remove --stage production"
   },
   "dependencies": {
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
-    "react-helmet-async": "^2.0.4"
+    "react-helmet-async": "^2.0.4",
+    "sst": "^4.12.2"
   },
   "devDependencies": {
     "@vitejs/plugin-react": "^4.2.1",

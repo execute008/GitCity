@@ -8,8 +8,12 @@
 import { useMemo } from "react";
 import { Building } from "./Building";
 import {
-  TILE_W, TILE_H, TOTAL_WEEKS, TOTAL_DAYS, MAX_BUILD_H, MIN_BUILD_H,
+  TILE_W, TILE_H, TOTAL_WEEKS, TOTAL_DAYS, MAX_BUILD_H, MIN_BUILD_H, BUILD_UNIT,
 } from "../../constants/graph";
+
+function heightFor(count) {
+  return count === 0 ? MIN_BUILD_H : Math.max(3, Math.sqrt(count) * BUILD_UNIT);
+}
 
 function gPos(week, day) {
   return {
@@ -27,7 +31,13 @@ export function IsometricGrid({
   const maxGX = gPos(TOTAL_WEEKS - 1, 0).gx + TW;
   const maxGY = gPos(TOTAL_WEEKS - 1, TOTAL_DAYS - 1).gy + TH;
 
-  const PAD_L = 8, PAD_T = MAX_BUILD_H + 12, PAD_R = 8, PAD_B = 10;
+  // Grow the top padding to match the tallest building so massive days don't
+  // get clipped by the viewBox.
+  const tallest = useMemo(
+    () => Math.max(MAX_BUILD_H, ...sortedCells.map(c => heightFor(c.count))),
+    [sortedCells]
+  );
+  const PAD_L = 8, PAD_T = tallest + 12, PAD_R = 8, PAD_B = 10;
   const vbW = PAD_L + (maxGX - minGX) + PAD_R;
   const vbH = PAD_T + maxGY + PAD_B;
   const OX = PAD_L - minGX;
@@ -85,8 +95,7 @@ export function IsometricGrid({
       <g>
         {paintOrder.map(cell => {
           const { gx, gy } = gPos(cell.week, cell.day);
-          const ratio = cell.count === 0 ? 0 : cell.count / Math.max(stats.maxCount, 1);
-          const H = cell.count === 0 ? MIN_BUILD_H : Math.max(3, ratio * (MAX_BUILD_H - MIN_BUILD_H));
+          const H = heightFor(cell.count);
           const isHov = hoveredDate === cell.date;
           const delay = mounted ? `${Math.min(cell.week * 8 + cell.day * 2, 500)}ms` : "0ms";
           return (

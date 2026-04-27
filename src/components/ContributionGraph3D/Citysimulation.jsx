@@ -530,6 +530,10 @@ export function CitySimulation({ cells, stats, theme, profile }) {
         // ── DISTRICTS & BUILDINGS ─────────────────────────────────────────────
         const blockInfos = [], buildingObjs = [], skyBeams = [];
         const globalMax = stats.maxCount || 1;
+        // Absolute scale (uncapped): bH = sqrt(count) * BUILD_UNIT_3D.
+        // 1 commit ≈ 7 world-units. 100 commits = 70u, 400 commits = 140u,
+        // 1000 commits ≈ 221u — genuine skyscrapers for power users.
+        const BUILD_UNIT_3D = 7;
 
         districts.forEach((dist, di) => {
             const col = di % cols, row = Math.floor(di / cols);
@@ -623,11 +627,14 @@ export function CitySimulation({ cells, stats, theme, profile }) {
                 const lw = dist.weeks.indexOf(week);
                 if (lw === -1) return;
 
-                const ratio = count / globalMax;
+                // Absolute height — uncapped — for genuine skyscrapers.
+                // Colour level still uses linear count/maxCount so the user's
+                // five-bucket palette stays calibrated to their range.
+                const linRatio = count / globalMax;
                 const wx = bx0 + lw * CELL + CELL / 2, wz = bz0 + day * CELL + CELL / 2;
                 const fw = CELL * 0.76, fd = CELL * 0.76;
-                const bH = Math.max(2, ratio * 68 + (ratio > 0.5 ? ratio * 18 : 0));
-                const lvl = Math.min(4, Math.ceil(ratio * 4));
+                const bH = Math.max(2, Math.sqrt(count) * BUILD_UNIT_3D);
+                const lvl = Math.min(4, Math.ceil(linRatio * 4));
                 const bColor = hex3(theme.levels[lvl], THREE);
 
                 const isSkyscraper = bH > 44, isHighrise = bH > 24 && !isSkyscraper;
@@ -663,7 +670,7 @@ export function CitySimulation({ cells, stats, theme, profile }) {
                     const spire = new THREE.Mesh(new THREE.ConeGeometry(fw * 0.1, bH * 0.28, 8), new THREE.MeshLambertMaterial({ color: 0xaaaacc }));
                     spire.position.set(wx, bH + t1H + t2H + bH * 0.14 + 0.28, wz); scene.add(spire);
 
-                    if (ratio > 0.65) {
+                    if (linRatio > 0.65) {
                         const beamMat = new THREE.MeshBasicMaterial({ color: 0xccddff, transparent: true, opacity: 0.055, side: THREE.DoubleSide });
                         const beam = new THREE.Mesh(new THREE.ConeGeometry(5, 250, 8, 1, true), beamMat);
                         const beamTop = bH + t1H + t2H + bH * 0.28 + 0.28;
@@ -686,7 +693,7 @@ export function CitySimulation({ cells, stats, theme, profile }) {
                     const r2 = rng(date ? parseInt(date.replace(/-/g, ""), 10) : di * 7 + day);
                     const wEmit = new THREE.Color(0.95, 0.82, 0.18);
 
-                    for (let f = 0; f < Math.min(floors, 26); f++) {
+                    for (let f = 0; f < floors; f++) {
                         const fy = f * flH + 1.4 + 0.28;
                         for (let cx2 = 0; cx2 < wCX; cx2++) {
                             const lit = r2() > 0.25;

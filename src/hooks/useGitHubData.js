@@ -6,7 +6,7 @@
  * Also fetches repo metadata for Neighborhood view.
  *
  * Priority:
- *  1. /api/contributions/{username}  — our own Vercel function (all years)
+ *  1. /api/contributions/{username}  — our own SST Lambda via Router (all years)
  *  2. github-contributions-api.jogruber.de — public proxy (last year only)
  *  3. github-contributions.vercel.app — secondary public proxy
  *

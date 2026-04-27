@@ -2,7 +2,7 @@ User-agent: *
 Allow: /
 
 # Sitemap
-Sitemap: https://gitcity.natrajx.in/sitemap.xml
+Sitemap: https://gitcity.draht.dev/sitemap.xml
 
 # Crawl-delay for bots
 Crawl-delay: 2

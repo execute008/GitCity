@@ -28,22 +28,25 @@
 
 import { useMemo } from "react";
 import { adjustBrightness } from "../../utils/colorUtils";
-import { TILE_W, TILE_H, MAX_BUILD_H, MIN_BUILD_H } from "../../constants/graph";
+import { TILE_W, TILE_H, MIN_BUILD_H, BUILD_UNIT } from "../../constants/graph";
 
 export function Building({ cell, maxCount, theme, hovered }) {
   const { count, date } = cell;
   const empty = count === 0;
-  const ratio = empty ? 0 : count / Math.max(maxCount, 1);
 
-  // Strictly linear height — taller = more commits
-  const H = empty
-    ? MIN_BUILD_H
-    : Math.max(4, MIN_BUILD_H + ratio * (MAX_BUILD_H - MIN_BUILD_H));
+  // Absolute height: sqrt(count) * BUILD_UNIT — uncapped, so a 400-commit day
+  // really towers over a 100-commit one. The IsometricGrid expands its
+  // viewBox padding to fit the tallest building.
+  const H = empty ? MIN_BUILD_H : Math.max(4, Math.sqrt(count) * BUILD_UNIT);
+
+  // Colour level still uses linear count/maxCount so the legend's 5 buckets
+  // are calibrated to this user's range.
+  const colourRatio = empty ? 0 : count / Math.max(maxCount, 1);
 
   const TW = TILE_W, TH = TILE_H;
 
   // Colours
-  const level    = empty ? 0 : Math.min(4, Math.ceil(ratio * 4));
+  const level    = empty ? 0 : Math.min(4, Math.ceil(colourRatio * 4));
   const base     = theme.levels[level];
   const colTop   = hovered ? adjustBrightness(base, 65)  : adjustBrightness(base, 35);
   const colLeft  = hovered ? adjustBrightness(base, 15)  : base;

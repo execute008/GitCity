@@ -1,16 +1,11 @@
 /**
- * /api/og/[username].js
+ * api/og.js — Lambda Function URL handler
+ * GET /api/og/{username}[?theme=...]
  *
  * Returns an SVG contribution heatmap for README embedding.
- * Uses public GitHub contributions API — no token needed.
- * Falls back to GitHub GraphQL if GITHUB_TOKEN is set.
- *
- * Routes:
- *   GET /rishabhbhartiya.svg          → default matrix theme
- *   GET /rishabhbhartiya.svg?theme=noir
- *   GET /api/og/rishabhbhartiya
- *   GET /api/og/rishabhbhartiya?theme=aurora
  */
+
+import { Resource } from "sst";
 
 const THEMES = {
     matrix: { bg: "#060d06", surface: "#0c1a0c", accent: "#00ff41", muted: "#3d6b3d", text: "#b0ffb0", levels: ["#0c1a0c", "#0e4020", "#1a7535", "#27ae60", "#00ff41"] },
@@ -21,13 +16,11 @@ const THEMES = {
     ice: { bg: "#060810", surface: "#0d1220", accent: "#a8c8ff", muted: "#5060a0", text: "#e8f0ff", levels: ["#0d1220", "#1a2a50", "#2a4a90", "#4a70d0", "#a8c8ff"] },
 };
 
-// ── Fetch via public proxy (no token needed) ──────────────────────────────────
 async function fetchViaProxy(username) {
-    const url = `https://github-contributions-api.jogruber.de/v4/${username}?y=last`;
+    const url = `https://github-contributions-api.jogruber.de/v4/${encodeURIComponent(username)}?y=last`;
     const res = await fetch(url, { headers: { "User-Agent": "GitCity-OG/1.0" } });
     if (!res.ok) throw new Error(`Proxy returned ${res.status}`);
     const json = await res.json();
-    // Response: { contributions: [{ date, count }], total: { ... } }
     const contributions = json.contributions;
     if (!Array.isArray(contributions) || contributions.length === 0) {
         throw new Error("No contributions from proxy");
@@ -37,7 +30,6 @@ async function fetchViaProxy(username) {
     return { name: username, total, days };
 }
 
-// ── Fetch via GitHub GraphQL (needs token) ────────────────────────────────────
 async function fetchViaGraphQL(username, token) {
     const today = new Date();
     const from = `${today.getFullYear()}-01-01T00:00:00Z`;
@@ -85,7 +77,10 @@ async function fetchViaGraphQL(username, token) {
     };
 }
 
-// ── Build SVG ─────────────────────────────────────────────────────────────────
+function escXml(s) {
+    return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+}
+
 function buildSVG(username, data, themeName) {
     const { days, total, name } = data;
     const t = THEMES[themeName] || THEMES.matrix;
@@ -93,7 +88,6 @@ function buildSVG(username, data, themeName) {
     const CELL = 11, GAP = 2, ROWS = 7;
     const PAD_X = 14, PAD_Y = 44;
 
-    // Group into week columns
     const weeks = [];
     let week = new Array(7).fill(null);
     days.forEach(d => {
@@ -114,7 +108,6 @@ function buildSVG(username, data, themeName) {
         return r < 0.25 ? 1 : r < 0.5 ? 2 : r < 0.75 ? 3 : 4;
     }
 
-    // Month labels
     let monthLabels = "";
     let lastMonth = -1;
     weeks.forEach((w, wi) => {
@@ -130,7 +123,6 @@ function buildSVG(username, data, themeName) {
         }
     });
 
-    // Day cells
     let cells = "";
     weeks.forEach((w, wi) => {
         w.forEach((d, dow) => {
@@ -142,7 +134,6 @@ function buildSVG(username, data, themeName) {
         });
     });
 
-    // Legend
     const lx = PAD_X;
     const ly = H - 18;
     const legend = [
@@ -151,27 +142,18 @@ function buildSVG(username, data, themeName) {
             `<rect x="${lx + 28 + i * 14}" y="${ly}" width="${CELL}" height="${CELL}" rx="2" fill="${t.levels[l]}"/>`
         ),
         `<text x="${lx + 105}" y="${ly + 8}" font-family="monospace" font-size="8" fill="${t.muted}">More</text>`,
-        // Right-aligned credit
-        `<text x="${W - PAD_X}" y="${ly + 8}" text-anchor="end" font-family="monospace" font-size="8" fill="${t.muted}">gitcity.natrajx.in</text>`,
+        `<text x="${W - PAD_X}" y="${ly + 8}" text-anchor="end" font-family="monospace" font-size="8" fill="${t.muted}">gitcity.draht.dev</text>`,
     ].join("");
 
     return `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}">
   <rect width="${W}" height="${H}" rx="10" fill="${t.bg}"/>
-  <!-- Header -->
   <text x="${PAD_X}" y="${PAD_Y - 24}" font-family="monospace" font-size="12" font-weight="bold" fill="${t.accent}">${escXml(name || username)}</text>
   <text x="${PAD_X + 6 + (name || username).length * 7.5}" y="${PAD_Y - 24}" font-family="monospace" font-size="10" fill="${t.muted}">'s GitCity Skyline</text>
   <text x="${PAD_X}" y="${PAD_Y - 10}" font-family="monospace" font-size="9" fill="${t.muted}">${total.toLocaleString()} contributions in the last year</text>
-  <!-- Month labels -->
   ${monthLabels}
-  <!-- Cells -->
   ${cells}
-  <!-- Legend -->
   ${legend}
 </svg>`;
-}
-
-function escXml(s) {
-    return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 }
 
 function errorSVG(msg) {
@@ -182,50 +164,54 @@ function errorSVG(msg) {
 </svg>`;
 }
 
-// ── Handler ───────────────────────────────────────────────────────────────────
-export default async function handler(req, res) {
-    res.setHeader("Access-Control-Allow-Origin", "*");
-    res.setHeader("Access-Control-Allow-Methods", "GET, OPTIONS");
-    if (req.method === "OPTIONS") return res.status(200).end();
+const corsHeaders = {
+    "Access-Control-Allow-Origin": "*",
+    "Access-Control-Allow-Methods": "GET, OPTIONS",
+};
 
-    // Parse username from query param (set by Vercel from [username].js)
-    // or fall back to URL path parsing
-    let username = (req.query.username || "").trim();
-    if (!username) {
-        const parts = (req.url || "").split("?")[0].split("/").filter(Boolean);
-        username = parts[parts.length - 1] || "";
-    }
-    username = decodeURIComponent(username).replace(/\.svg$/i, "").trim();
+function svgResponse(statusCode, body, cache = true) {
+    return {
+        statusCode,
+        headers: {
+            "Content-Type": "image/svg+xml",
+            "Cache-Control": cache
+                ? (process.env.CACHE_CONTROL || "s-maxage=3600, stale-while-revalidate=86400")
+                : "no-store",
+            ...corsHeaders,
+        },
+        body,
+    };
+}
 
-    const theme = (req.query.theme || "matrix").trim().toLowerCase();
+export async function handler(event) {
+    const method = event.requestContext?.http?.method ?? "GET";
+    if (method === "OPTIONS") return { statusCode: 200, headers: corsHeaders, body: "" };
 
-    // Validate username format
+    const qs = event.queryStringParameters || {};
+    const path = event.rawPath || "";
+    const segments = path.split("/").filter(Boolean);
+    let username = decodeURIComponent(segments[segments.length - 1] || "")
+        .replace(/\.svg$/i, "")
+        .trim();
+    if (!username && qs.username) username = qs.username.trim();
+
+    const theme = (qs.theme || "matrix").trim().toLowerCase();
+
     if (!username || !/^[a-zA-Z0-9][a-zA-Z0-9-]{0,38}$/.test(username)) {
-        res.setHeader("Content-Type", "image/svg+xml");
-        return res.status(400).send(errorSVG(`Invalid username: "${username}"`));
+        return svgResponse(400, errorSVG(`Invalid username: "${username}"`), false);
     }
 
     try {
         let data;
-
-        // Try public proxy first (no token needed — always works)
         try {
             data = await fetchViaProxy(username);
         } catch (proxyErr) {
-            // Fall back to GitHub GraphQL if token available
-            const token = process.env.GITHUB_TOKEN;
+            const token = Resource.GithubToken?.value;
             if (!token) throw new Error(`Could not fetch contributions for "${username}". Try again later.`);
             data = await fetchViaGraphQL(username, token);
         }
-
-        const svg = buildSVG(username, data, theme);
-        res.setHeader("Content-Type", "image/svg+xml");
-        res.setHeader("Cache-Control", "s-maxage=3600, stale-while-revalidate=86400");
-        return res.status(200).send(svg);
-
+        return svgResponse(200, buildSVG(username, data, theme));
     } catch (err) {
-        res.setHeader("Content-Type", "image/svg+xml");
-        res.setHeader("Cache-Control", "no-store");
-        return res.status(200).send(errorSVG(err.message));
+        return svgResponse(200, errorSVG(err.message), false);
     }
 }

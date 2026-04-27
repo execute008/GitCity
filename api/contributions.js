@@ -1,21 +1,17 @@
 /**
- * /api/contributions/[username].js — GitCity
+ * api/contributions.js — Lambda Function URL handler
+ * GET /api/contributions/{username}
  *
- * Vercel serverless function — CommonJS format.
  * Fetches ALL years of contribution data for a GitHub user via GraphQL.
- * Uses GITHUB_TOKEN env variable — never exposed to the client.
+ * Reads token from SST-linked secret (Resource.GithubToken.value).
  */
+
+import { Resource } from "sst";
 
 const GITHUB_GRAPHQL = "https://api.github.com/graphql";
 
 async function fetchJoinYear(username, token) {
-  const query = `
-    query($login: String!) {
-      user(login: $login) {
-        createdAt
-      }
-    }
-  `;
+  const query = `query($login: String!) { user(login: $login) { createdAt } }`;
   const res = await fetch(GITHUB_GRAPHQL, {
     method: "POST",
     headers: { "Content-Type": "application/json", "Authorization": `bearer ${token}` },
@@ -27,25 +23,19 @@ async function fetchJoinYear(username, token) {
 }
 
 async function fetchYear(username, year, token) {
-  const from = `${year}-01-01T00:00:00Z`;
-  // Cap `to` at today — GitHub rejects future dates
   const today = new Date();
   const isCurrentYear = year === today.getFullYear();
-  const toDate = isCurrentYear
+  const from = `${year}-01-01T00:00:00Z`;
+  const to = isCurrentYear
     ? today.toISOString().replace(/\.\d{3}Z$/, "Z")
     : `${year}-12-31T23:59:59Z`;
-  const to = toDate;
+
   const query = `
     query($login: String!, $from: DateTime!, $to: DateTime!) {
       user(login: $login) {
         contributionsCollection(from: $from, to: $to) {
           contributionCalendar {
-            weeks {
-              contributionDays {
-                date
-                contributionCount
-              }
-            }
+            weeks { contributionDays { date contributionCount } }
           }
         }
       }
@@ -58,7 +48,6 @@ async function fetchYear(username, year, token) {
   });
 
   if (!res.ok) throw new Error(`GitHub API error: ${res.status}`);
-
   const json = await res.json();
   if (json.errors) throw new Error(json.errors[0]?.message ?? "GraphQL error");
 
@@ -70,24 +59,38 @@ async function fetchYear(username, year, token) {
     .map(d => ({ date: d.date, count: d.contributionCount }));
 }
 
-export default async function handler(req, res) {
-  res.setHeader("Access-Control-Allow-Origin", "*");
-  res.setHeader("Access-Control-Allow-Methods", "GET, OPTIONS");
-  res.setHeader("Access-Control-Allow-Headers", "Content-Type");
+const corsHeaders = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Methods": "GET, OPTIONS",
+  "Access-Control-Allow-Headers": "Content-Type",
+};
 
-  if (req.method === "OPTIONS") return res.status(200).end();
-  if (req.method !== "GET") return res.status(405).json({ error: "Method not allowed" });
+function json(statusCode, body, extraHeaders = {}) {
+  return {
+    statusCode,
+    headers: { "Content-Type": "application/json", ...corsHeaders, ...extraHeaders },
+    body: JSON.stringify(body),
+  };
+}
 
-  const { username } = req.query;
-  if (!username) return res.status(400).json({ error: "Username required" });
+export async function handler(event) {
+  const method = event.requestContext?.http?.method ?? "GET";
+  if (method === "OPTIONS") return { statusCode: 200, headers: corsHeaders, body: "" };
+  if (method !== "GET") return json(405, { error: "Method not allowed" });
 
-  const token = process.env.GITHUB_TOKEN;
-  if (!token) return res.status(500).json({ error: "GITHUB_TOKEN not configured on server." });
+  const path = event.rawPath || "";
+  const segments = path.split("/").filter(Boolean);
+  const username = decodeURIComponent(segments[segments.length - 1] || "").trim();
+  if (!username || !/^[a-zA-Z0-9][a-zA-Z0-9-]{0,38}$/.test(username)) {
+    return json(400, { error: "Username required" });
+  }
+
+  const token = Resource.GithubToken.value;
+  if (!token) return json(500, { error: "GITHUB_TOKEN not configured on server." });
 
   try {
     const currentYear = new Date().getFullYear();
     const joinYear = await fetchJoinYear(username, token);
-
     const years = [];
     for (let y = joinYear; y <= currentYear; y++) years.push(y);
 
@@ -102,11 +105,11 @@ export default async function handler(req, res) {
       .map(([date, count]) => ({ date, count }))
       .sort((a, b) => a.date.localeCompare(b.date));
 
-    res.setHeader("Cache-Control", "s-maxage=3600, stale-while-revalidate=86400");
-    return res.status(200).json({ username, years, contributions });
-
+    return json(200, { username, years, contributions }, {
+      "Cache-Control": process.env.CACHE_CONTROL || "s-maxage=3600, stale-while-revalidate=86400",
+    });
   } catch (err) {
     const status = err.message.includes("not found") ? 404 : 500;
-    return res.status(status).json({ error: err.message });
+    return json(status, { error: err.message });
   }
-};
+}

@@ -4,5 +4,8 @@ dist/
 .DS_Store
 .vscode/
 *.log
-.vercel
 .env*.local
+
+# SST
+.sst/
+sst-env.d.ts

@@ -12,7 +12,12 @@ export const TILE_W      = 10;   // rhombus full width
 export const TILE_H      = 5;    // rhombus full height
 
 // Building heights (in same SVG units as tile)
-export const MAX_BUILD_H = 48;   // tallest building
+// Buildings are absolute-scale: bH = sqrt(count) * BUILD_UNIT — uncapped, so
+// massive days build genuine skyscrapers. MAX_BUILD_H is now just the
+// _default_ viewport top padding (used when nobody has any contributions);
+// the actual viewBox grows with the tallest building.
+export const BUILD_UNIT  = 5;    // sqrt-units of height per commit
+export const MAX_BUILD_H = 48;   // fallback ceiling for empty/loading state
 export const MIN_BUILD_H = 1;    // flat slab for 0-contribution days
 
 // Grid size

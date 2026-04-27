@@ -119,40 +119,41 @@ export function Building({ cell, maxCount, theme, hovered }) {
         />
       )}
 
-      {/* LEFT-face windows
-          Face occupies x: [Lx … Bx] = [-TW/2 … 0], width = TW/2
-          2 columns, each column centred in its half */}
+      {/* LEFT-face windows — sheared to match the face's isometric slope.
+          Face top edge runs from L(Lx, Ly) → B(Bx, By); slope = +TH/TW (= +0.5).
+          Each window is a parallelogram with vertical left/right edges and
+          slanted top/bottom edges parallel to the face top edge. */}
       {windows.map(({ f, face, col, lit }) => {
         if (face !== "L") return null;
-        const fH      = H / floors;
-        const faceW   = TW / 2;                          // total face width
-        const colW    = faceW / 2;                        // each column width
-        // Centre window in this column
-        const wx      = Lx + col * colW + (colW - wW) / 2;
-        // Y: bottom of shaft upward, slight inset
-        const wy      = By + H - (f + 1) * fH + fH * 0.28;
+        const fH    = H / floors;
+        const colW  = (TW / 2) / 2;                              // 2 cols per face
+        const u     = col * colW + (colW - wW) / 2;              // face-local x from Lx
+        const v     = H - (f + 1) * fH + fH * 0.28;              // face-local y from top edge
+        const slope = TH / TW;                                   // +0.5 for 2:1 iso
+        const x0 = Lx + u,        y0 = Ly + slope * u + v;
+        const x1 = Lx + u + wW,   y1 = Ly + slope * (u + wW) + v;
         return (
-          <rect key={`lw${f}c${col}`}
-            x={wx} y={wy} width={wW} height={wH} rx={0.4}
+          <polygon key={`lw${f}c${col}`}
+            points={`${x0},${y0} ${x1},${y1} ${x1},${y1 + wH} ${x0},${y0 + wH}`}
             fill={lit ? theme.winLit : theme.winDark}
             opacity={lit ? (hovered ? 1 : 0.88) : 0.18}
           />
         );
       })}
 
-      {/* RIGHT-face windows
-          Face occupies x: [Bx … Rx] = [0 … TW/2], width = TW/2
-          2 columns */}
+      {/* RIGHT-face windows — slope = −TH/TW (face top edge runs B → R, sloping up). */}
       {windows.map(({ f, face, col, lit }) => {
         if (face !== "R") return null;
-        const fH      = H / floors;
-        const faceW   = TW / 2;
-        const colW    = faceW / 2;
-        const wx      = Bx + col * colW + (colW - wW) / 2;
-        const wy      = By + H - (f + 1) * fH + fH * 0.28;
+        const fH    = H / floors;
+        const colW  = (TW / 2) / 2;
+        const u     = col * colW + (colW - wW) / 2;              // face-local x from Bx
+        const v     = H - (f + 1) * fH + fH * 0.28;
+        const slope = -TH / TW;                                  // −0.5
+        const x0 = Bx + u,        y0 = By + slope * u + v;
+        const x1 = Bx + u + wW,   y1 = By + slope * (u + wW) + v;
         return (
-          <rect key={`rw${f}c${col}`}
-            x={wx} y={wy} width={wW} height={wH} rx={0.4}
+          <polygon key={`rw${f}c${col}`}
+            points={`${x0},${y0} ${x1},${y1} ${x1},${y1 + wH} ${x0},${y0 + wH}`}
             fill={lit ? theme.winLit : theme.winDark}
             opacity={lit ? 0.62 : 0.13}
           />
